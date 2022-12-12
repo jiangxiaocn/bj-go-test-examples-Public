@@ -1,0 +1,78 @@
+name: Main
+
+on:
+  push:
+    branches: [main]
+    tags: ['**']
+  workflow_dispatch:
+
+jobs:
+  scan:
+    name: Build, Test & Scan
+    runs-on: [self-hosted, ubuntu, developer-foundations]
+    environment:
+      name: sonarqube
+      url: ${{ steps.scan-setup.outputs.url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: go.mod
+
+      - name: Set up GCC
+        run: |
+              sudo apt-get update
+              sudo apt-get install -y make gcc build-essential
+
+      - name: Download Required Modules
+        run: |
+              git config --global url."https://${{ secrets.BLOCKET_GITHUB_SERVICE_USER_TOKEN }}:@github.schibsted.io/".insteadOf "https://github.schibsted.io/"
+              go mod download -json
+        env:
+          GOPROXY: https://${{ secrets.ARTIFACTORY_USER }}:${{ secrets.ARTIFACTORY_PASSWORD }}@artifacts.schibsted.io/artifactory/api/go/go-virtual|https://proxy.golang.org|direct
+          GOPRIVATE: github.schibsted.io/blocket/*
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Test
+        run: go test -v -coverprofile=coverage.out ./...
+
+      - name: Set up Sonar variables
+        id: scan-setup
+        run: |
+              echo SONAR_PROJECT_KEY=${GITHUB_REPOSITORY/\//_} >> $GITHUB_ENV
+              echo SONAR_PROJECT_VERSION=${GITHUB_REF#refs/*/} >> $GITHUB_ENV
+              echo "url=${{ env.SONAR_HOST_URL }}dashboard?id=${GITHUB_REPOSITORY/\//_}" >> $GITHUB_OUTPUT
+
+      - name: SonarQube Scan
+        uses: sonarsource/sonarqube-scan-action@v1.1.0
+        with:
+          args: >
+            -Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY }}
+            -Dsonar.projectVersion=${{ env.SONAR_PROJECT_VERSION }}
+            -Dsonar.go.coverage.reportPaths=coverage.out
+            -Dsonar.python.coverage.reportPaths=coverage.xml
+            -Dsonar.test.inclusions=**/*_test.go
+            -Dsonar.qualitygate.wait=true
+
+  blocketdev:
+      name: Deploy (blocket.dev)
+      needs: scan
+      concurrency: staging_environment
+      runs-on: [ubuntu, developer-foundations]
+      steps:
+        - name: Deploy
+          run: echo "Not defined yet"
+
+  blocketse:
+      name: Release (blocket.se)
+      needs: blocketdev
+      concurrency: production_environment
+      runs-on: [ubuntu, developer-foundations]
+      steps:
+        - name: Release
+          run: echo "Not defined yet"

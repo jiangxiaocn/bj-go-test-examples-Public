@@ -1,0 +1,15 @@
+language: go
+go:
+  - "1.19"
+
+env:
+  global:
+    - GOPRIVATE=github.schibsted.io
+
+script: go test -v -coverprofile=coverage.out ./...
+
+after_script:
+  - wget -q https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.7.0.2747-linux.zip
+  - sudo unzip sonar-scanner-cli-4.7.0.2747-linux.zip -d /opt/sonar-scanner
+  - export PATH="/opt/sonar-scanner/sonar-scanner-4.7.0.2747-linux/bin/:$PATH"
+  - sonar-scanner -Dsonar.projectKey="${TRAVIS_REPO_SLUG/\//_}" -Dsonar.projectVersion="${TRAVIS_BRANCH}" -Dsonar.login=$SONAR_LOGIN -Dsonar.host.url=$SONAR_HOST -Dsonar.qualitygate.wait=true -Dsonar.go.coverage.reportPaths=coverage.out -Dsonar.test.inclusions=**/*_test.go

@@ -1,0 +1,53 @@
+name: Pull Requests
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build & Test
+    runs-on: [ubuntu, developer-foundations]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: go.mod
+
+      - name: Set up GCC
+        run: sudo apt-get install -y make gcc build-essential
+
+      - name: Download Required Modules
+        run: |
+              git config --global url."https://${{ secrets.BLOCKET_GITHUB_SERVICE_USER_TOKEN }}:@github.schibsted.io/".insteadOf "https://github.schibsted.io/"
+              go mod download -json
+        env:
+          GOPROXY: https://${{ secrets.ARTIFACTORY_USER }}:${{ secrets.ARTIFACTORY_PASSWORD }}@artifacts.schibsted.io/artifactory/api/go/go-virtual|https://proxy.golang.org|direct
+          GOPRIVATE: github.schibsted.io/blocket/*
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Test
+        run: go test -v -coverprofile=coverage.out ./...
+
+  lint:
+    name: Lint
+    runs-on: [ubuntu, developer-foundations]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Build essentials
+        run: sudo apt-get install -y build-essential
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v3
